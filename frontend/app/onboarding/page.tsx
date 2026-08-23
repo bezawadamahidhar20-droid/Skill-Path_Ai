@@ -200,6 +200,9 @@ export default function OnboardingPage() {
         target_role: finalRole,
       });
 
+      // Auto-trigger PRS calculation in the background (don't block navigation)
+      api.post('/api/student/calculate-prs').catch(() => {});
+
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Onboarding submission error:", err);
@@ -291,11 +294,10 @@ export default function OnboardingPage() {
                           <SelectValue placeholder="Select Year" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="1st Year">1st Year</SelectItem>
-                          <SelectItem value="2nd Year">2nd Year</SelectItem>
-                          <SelectItem value="3rd Year">3rd Year</SelectItem>
-                          <SelectItem value="4th Year">4th Year</SelectItem>
-                          <SelectItem value="Graduate">Graduate</SelectItem>
+                          <SelectItem value="FY">First Year (FY)</SelectItem>
+                          <SelectItem value="SY">Second Year (SY)</SelectItem>
+                          <SelectItem value="TY">Third Year (TY)</SelectItem>
+                          <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -313,9 +315,8 @@ export default function OnboardingPage() {
                           <SelectItem value="IT">IT</SelectItem>
                           <SelectItem value="ECE">ECE</SelectItem>
                           <SelectItem value="EEE">EEE</SelectItem>
-                          <SelectItem value="Mechanical">Mechanical</SelectItem>
-                          <SelectItem value="Civil">Civil</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
+                          <SelectItem value="MECH">MECH</SelectItem>
+                          <SelectItem value="CIVIL">CIVIL</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

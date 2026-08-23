@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertCircle, ArrowRight, Loader2, CheckCircle2, User, Mail, Lock, GraduationCap, Code2, Linkedin, Github, Sparkles, ChevronDown } from 'lucide-react'
+import { AlertCircle, ArrowRight, Loader2, CheckCircle2, User, Mail, Lock, Eye, EyeOff, GraduationCap, Code2, Linkedin, Github, Sparkles, ChevronDown } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [isSocialLoading, setIsSocialLoading] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const handleGoogleAuth = async () => {
     setIsSocialLoading("google")
@@ -231,16 +232,26 @@ export default function LoginPage() {
                   <Lock className="h-4 w-4 text-blue-500" />
                   Password
                 </Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="h-12 text-base border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl"
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="h-12 text-base border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
 
               {!isLogin && (
@@ -262,7 +273,7 @@ export default function LoginPage() {
                           <SelectItem value="FY">First Year (FY)</SelectItem>
                           <SelectItem value="SY">Second Year (SY)</SelectItem>
                           <SelectItem value="TY">Third Year (TY)</SelectItem>
-                          <SelectItem value="FINAL">Final Year</SelectItem>
+                          <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -278,8 +289,8 @@ export default function LoginPage() {
                         <SelectContent>
                           <SelectItem value="CSE">CSE</SelectItem>
                           <SelectItem value="IT">IT</SelectItem>
-                          <SelectItem value="ECS">ECS</SelectItem>
-                          <SelectItem value="ENTC">ENTC</SelectItem>
+                          <SelectItem value="ECE">ECE</SelectItem>
+                          <SelectItem value="EEE">EEE</SelectItem>
                           <SelectItem value="MECH">MECH</SelectItem>
                           <SelectItem value="CIVIL">CIVIL</SelectItem>
                         </SelectContent>

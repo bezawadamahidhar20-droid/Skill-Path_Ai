@@ -19,8 +19,9 @@ export function middleware(request: NextRequest) {
     const token = request.cookies.get('token')?.value
 
     // Check if the current route is protected
+    // Exclude /admin/login from protection since it's an auth route
     const isProtectedRoute = protectedRoutes.some(route =>
-        pathname.startsWith(route)
+        pathname.startsWith(route) && !pathname.startsWith('/admin/login')
     )
 
     // Check if the current route is an auth route

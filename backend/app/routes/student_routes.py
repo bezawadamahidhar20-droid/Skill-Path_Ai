@@ -5,6 +5,8 @@ from app.database import get_pool
 from app.utils.auth_dependency import get_current_user
 from app.models.student_model import StudentUpdate, StudentOnboarding
 
+router = APIRouter()
+
 
 @router.get("/me")
 async def get_my_profile(user=Depends(get_current_user)):
@@ -352,3 +354,71 @@ async def clear_groq_cache(user=Depends(get_current_user)):
         "UPDATE students SET github_groq_analysis = NULL WHERE email = $1", email
     )
     return {"message": "Groq analysis cache cleared successfully"}
+
+
+@router.get("/roadmap-tasks")
+async def get_roadmap_tasks(user=Depends(get_current_user)):
+    """Get all saved roadmap task states for the current user."""
+    email = user["email"]
+    pool = await get_pool()
+
+    student = await pool.fetchrow("SELECT id FROM students WHERE email = $1", email)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    rows = await pool.fetch(
+        "SELECT task_id, task_title, completed FROM roadmap_tasks WHERE student_id = $1",
+        student["id"],
+    )
+    return {"tasks": [{"task_id": r["task_id"], "task_title": r["task_title"], "completed": r["completed"]} for r in rows]}
+
+
+@router.post("/roadmap-tasks")
+async def save_roadmap_task(task: dict, user=Depends(get_current_user)):
+    """Save/update a single roadmap task state."""
+    email = user["email"]
+    pool = await get_pool()
+
+    student = await pool.fetchrow("SELECT id FROM students WHERE email = $1", email)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    task_id = task.get("task_id")
+    completed = task.get("completed", False)
+    task_title = task.get("task_title", "")
+
+    if not task_id:
+        raise HTTPException(status_code=400, detail="task_id is required")
+
+    await pool.execute("""
+        INSERT INTO roadmap_tasks (student_id, task_id, task_title, completed, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (student_id, task_id) DO UPDATE SET completed = $4, updated_at = NOW()
+    """, student["id"], task_id, task_title, completed)
+
+    return {"message": "Task updated successfully"}
+
+
+@router.post("/roadmap-tasks/bulk")
+async def save_roadmap_tasks_bulk(tasks: list, user=Depends(get_current_user)):
+    """Save/update multiple roadmap task states at once."""
+    email = user["email"]
+    pool = await get_pool()
+
+    student = await pool.fetchrow("SELECT id FROM students WHERE email = $1", email)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    for t in tasks:
+        task_id = t.get("task_id")
+        completed = t.get("completed", False)
+        task_title = t.get("task_title", "")
+        if not task_id:
+            continue
+        await pool.execute("""
+            INSERT INTO roadmap_tasks (student_id, task_id, task_title, completed, updated_at)
+            VALUES ($1, $2, $3, $4, NOW())
+            ON CONFLICT (student_id, task_id) DO UPDATE SET completed = $4, updated_at = NOW()
+        """, student["id"], task_id, task_title, completed)
+
+    return {"message": f"{len(tasks)} tasks updated successfully"}

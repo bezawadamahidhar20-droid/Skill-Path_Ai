@@ -55,8 +55,14 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setResumeFile(e.target.files[0])
-            handleAnalyzeResume(e.target.files[0])
+            const file = e.target.files[0]
+            const maxSize = 5 * 1024 * 1024 // 5MB
+            if (file.size > maxSize) {
+                alert('File too large. Maximum size is 5MB. Please compress your image and try again.')
+                return
+            }
+            setResumeFile(file)
+            handleAnalyzeResume(file)
         }
     }
 
@@ -72,6 +78,9 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
 
             setResumeAnalysis(res.data)
             alert(`Resume Analyzed! ATS Score: ${res.data.ats_score}/100`)
+
+            // Auto-recalculate PRS after resume analysis
+            api.post('/api/student/calculate-prs').catch(() => {})
 
             const analysisData = res.data.analysis
             if (analysisData && analysisData.skills && Array.isArray(analysisData.skills)) {
@@ -192,10 +201,10 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
                                             <SelectValue placeholder="Select Year" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="FY">First Year</SelectItem>
-                                            <SelectItem value="SY">Second Year</SelectItem>
-                                            <SelectItem value="TY">Third Year</SelectItem>
-                                            <SelectItem value="FINAL">Final Year</SelectItem>
+                                        <SelectItem value="FY">First Year (FY)</SelectItem>
+                                        <SelectItem value="SY">Second Year (SY)</SelectItem>
+                                        <SelectItem value="TY">Third Year (TY)</SelectItem>
+                                        <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -209,12 +218,12 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
                                             <SelectValue placeholder="Select Branch" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="CSE">CSE</SelectItem>
-                                            <SelectItem value="IT">IT</SelectItem>
-                                            <SelectItem value="ECS">ECS</SelectItem>
-                                            <SelectItem value="ENTC">ENTC</SelectItem>
-                                            <SelectItem value="MECH">MECH</SelectItem>
-                                            <SelectItem value="CIVIL">CIVIL</SelectItem>
+                                        <SelectItem value="CSE">CSE</SelectItem>
+                                        <SelectItem value="IT">IT</SelectItem>
+                                        <SelectItem value="ECE">ECE</SelectItem>
+                                        <SelectItem value="EEE">EEE</SelectItem>
+                                        <SelectItem value="MECH">MECH</SelectItem>
+                                        <SelectItem value="CIVIL">CIVIL</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

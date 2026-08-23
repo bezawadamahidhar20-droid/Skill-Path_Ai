@@ -7,10 +7,10 @@ GITHUB_API = "https://api.github.com"
 
 
 def github_headers():
-    return {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
-    }
+    headers = {"Accept": "application/vnd.github+json"}
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"token {GITHUB_TOKEN}"
+    return headers
 
 
 def extract_github_username(github_url: str) -> str:
@@ -30,6 +30,8 @@ def fetch_user(username: str):
     url = f"{GITHUB_API}/users/{username}"
     res = requests.get(url, headers=github_headers())
 
+    if res.status_code == 403:
+        raise Exception("GitHub API rate limit reached. Please set GITHUB_TOKEN in backend .env or try again later.")
     if res.status_code != 200:
         raise Exception(f"GitHub user fetch failed: {res.text}")
 
@@ -40,6 +42,8 @@ def fetch_repos(username: str, limit=20):
     url = f"{GITHUB_API}/users/{username}/repos?per_page=100&sort=pushed"
     res = requests.get(url, headers=github_headers())
 
+    if res.status_code == 403:
+        raise Exception("GitHub API rate limit reached. Please set GITHUB_TOKEN in backend .env or try again later.")
     if res.status_code != 200:
         raise Exception(f"GitHub repos fetch failed: {res.text}")
 

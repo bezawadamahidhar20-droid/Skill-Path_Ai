@@ -26,6 +26,7 @@ import {
     CheckCircle,
     Circle,
     ArrowRight,
+    AlertCircle,
     GraduationCap,
     Trophy,
     Lightbulb
@@ -187,6 +188,7 @@ export default function DashboardPage() {
     const [loadingCompanyMatches, setLoadingCompanyMatches] = useState(false)
     const [targetRole, setTargetRole] = useState<string>("Software Engineer")
     const [customRoadmapTasks, setCustomRoadmapTasks] = useState<any[]>([])
+    const [networkError, setNetworkError] = useState<string | null>(null)
 
     useEffect(() => {
         if (studentData?.target_role || (studentData?.skills && studentData.skills.length > 0)) {
@@ -199,6 +201,7 @@ export default function DashboardPage() {
     }, [])
 
     const fetchDashboardData = async () => {
+        setNetworkError(null)
         try {
             const studentRes = await api.get('/api/student/me')
             if (studentRes.data && studentRes.data.onboarding_completed === false) {
@@ -229,15 +232,15 @@ export default function DashboardPage() {
                 window.location.href = '/login'
                 return
             }
-            setStudentData({
-                name: 'Student',
-                branch: 'CSE',
-                year: '3rd Year',
-                cgpa: 8.0,
-                target_role: 'Software Engineer',
-                skills: ['Java', 'Python', 'React', 'SQL'],
-                onboarding_completed: true
-            })
+            // Detect network error (backend not running)
+            const isNetworkError = !error.response && (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || error.message?.includes('ECONNREFUSED'));
+            if (isNetworkError) {
+                setNetworkError('Backend server is not running at http://localhost:8000. Please start the backend (cd backend && uvicorn app.main:app --reload) and click Retry.')
+            } else if (error.response) {
+                setNetworkError(`Server error ${error.response.status}: ${error.response.data?.detail || 'Something went wrong'}`)
+            } else {
+                setNetworkError('An unexpected error occurred. Please try again.')
+            }
             setLoading(false)
         }
     }
@@ -266,6 +269,14 @@ export default function DashboardPage() {
         try {
             const res = await api.post('/api/student/analyze/github')
             setGithubData(res.data.github_analysis)
+            // Auto-recalculate PRS after GitHub analysis to keep score fresh
+            api.post('/api/student/calculate-prs').then((prsRes) => {
+                setPrsData({
+                    prs_score: prsRes.data.prs_score,
+                    prs_level: prsRes.data.prs_level,
+                    breakdown: prsRes.data.prs_breakdown
+                })
+            }).catch(() => {})
             fetchDashboardData()
         } catch (error: any) {
             console.error('GitHub analysis error:', error)
@@ -317,6 +328,35 @@ export default function DashboardPage() {
                         <Skeleton className="h-52" />
                     </div>
                     <Skeleton className="h-80" />
+                </div>
+            </div>
+        )
+    }
+
+    // Full-page error state when backend is unreachable
+    if (networkError && !studentData?.onboarding_completed) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white p-6 flex items-center justify-center">
+                <div className="max-w-lg w-full text-center space-y-6">
+                    <div className="mx-auto w-20 h-20 bg-red-100 rounded-full flex items-center justify-center">
+                        <AlertCircle className="h-10 w-10 text-red-500" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900">Connection Error</h2>
+                        <p className="text-gray-500 mt-2 text-sm leading-relaxed">{networkError}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4 text-left text-xs font-mono text-gray-600 space-y-1">
+                        <p className="font-bold text-gray-700">To fix this, run:</p>
+                        <code className="block bg-white p-2 rounded border text-blue-600">cd backend && uvicorn app.main:app --reload --port 8000</code>
+                    </div>
+                    <div className="flex gap-3 justify-center">
+                        <Button onClick={fetchDashboardData} className="gap-2">
+                            <RefreshCw className="h-4 w-4" /> Retry
+                        </Button>
+                        <Button variant="outline" onClick={() => { clearAuth(); router.push('/login') }}>
+                            <LogOut className="h-4 w-4 mr-2" /> Logout
+                        </Button>
+                    </div>
                 </div>
             </div>
         )
@@ -387,6 +427,29 @@ export default function DashboardPage() {
                         </Button>
                     </div>
                 </motion.div>
+
+                {/* Network Error Banner */}
+                {networkError && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3"
+                    >
+                        <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                        <div className="flex-1">
+                            <p className="text-sm font-semibold text-red-700">Connection Error</p>
+                            <p className="text-xs text-red-600 mt-1">{networkError}</p>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={fetchDashboardData}
+                            className="shrink-0 border-red-200 text-red-700 hover:bg-red-100"
+                        >
+                            <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                        </Button>
+                    </motion.div>
+                )}
 
                 {/* Placement Readiness AI Command Center */}
                 <motion.div

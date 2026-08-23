@@ -79,6 +79,19 @@ async def init_db(pool: asyncpg.Pool):
             );
         """)
 
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS roadmap_tasks (
+                id SERIAL PRIMARY KEY,
+                student_id INTEGER REFERENCES students(id) ON DELETE CASCADE,
+                task_id VARCHAR(100) NOT NULL,
+                task_title VARCHAR(500),
+                completed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(student_id, task_id)
+            );
+        """)
+
         # Seed an admin account if none exists
         admin_exists = await conn.fetchval(
             "SELECT EXISTS(SELECT 1 FROM admins LIMIT 1)"
@@ -100,31 +113,31 @@ async def init_db(pool: asyncpg.Pool):
             sample_companies = [
                 ("Google", "Software Engineer", "Tier-1", 7.0, 
                  ["Python", "Java", "C++", "Go", "JavaScript", "React", "Machine Learning"],
-                 ["TY", "FINAL"], ["CSE", "IT", "ECS"], "Leading tech company"),
+                 ["TY", "FINAL"], ["CSE", "IT", "ECE"], "Leading tech company"),
                 ("Microsoft", "Software Development Engineer", "Tier-1", 7.5,
                  ["C#", "Java", "Python", "TypeScript", "Azure", "React"],
-                 ["TY", "FINAL"], ["CSE", "IT", "ECS"], "Global technology leader"),
+                 ["TY", "FINAL"], ["CSE", "IT", "ECE"], "Global technology leader"),
                 ("Amazon", "SDE Intern/FTE", "Tier-1", 6.5,
                  ["Java", "Python", "AWS", "React", "Node.js", "SQL"],
-                 ["TY", "FINAL"], ["CSE", "IT", "ECS", "ENTC"], "E-commerce and cloud computing giant"),
+                 ["TY", "FINAL"], ["CSE", "IT", "ECE", "EEE"], "E-commerce and cloud computing giant"),
                 ("Infosys", "Systems Engineer", "Tier-2", 5.0,
                  ["Java", "Python", "SQL", "JavaScript", "HTML", "CSS"],
-                 ["FINAL"], ["CSE", "IT", "ECS", "ENTC", "MECH"], "IT services company"),
+                 ["FINAL"], ["CSE", "IT", "ECE", "EEE", "MECH"], "IT services company"),
                 ("TCS", "IT Trainee", "Tier-2", 5.0,
                  ["Java", "Python", "SQL", "C", "C++", "HTML"],
-                 ["FINAL"], ["CSE", "IT", "ECS", "ENTC", "MECH", "CIVIL"], "IT services and consulting"),
+                 ["FINAL"], ["CSE", "IT", "ECE", "EEE", "MECH", "CIVIL"], "IT services and consulting"),
                 ("Wipro", "Project Engineer", "Tier-2", 5.5,
                  ["Java", "Python", "SQL", "JavaScript", "AWS"],
-                 ["FINAL"], ["CSE", "IT", "ECS", "ENTC"], "IT services company"),
+                 ["FINAL"], ["CSE", "IT", "ECE", "EEE"], "IT services company"),
                 ("Accenture", "Associate Software Engineer", "Tier-2", 5.0,
                  ["Java", "Python", "SQL", "JavaScript", "SAP"],
-                 ["FINAL"], ["CSE", "IT", "ECS", "ENTC", "MECH"], "Global professional services"),
+                 ["FINAL"], ["CSE", "IT", "ECE", "EEE", "MECH"], "Global professional services"),
                 ("Flipkart", "Software Development Engineer", "Tier-1", 7.0,
                  ["Java", "Python", "Kotlin", "React", "Machine Learning"],
-                 ["TY", "FINAL"], ["CSE", "IT", "ECS"], "E-commerce platform"),
+                 ["TY", "FINAL"], ["CSE", "IT", "ECE"], "E-commerce platform"),
                 ("IBM", "Software Developer", "Tier-2", 6.0,
                  ["Java", "Python", "C++", "Cloud", "React", "AI"],
-                 ["TY", "FINAL"], ["CSE", "IT", "ECS", "ENTC"], "Technology and consulting"),
+                 ["TY", "FINAL"], ["CSE", "IT", "ECE", "EEE"], "Technology and consulting"),
                 ("StartupXYZ", "Full Stack Developer", "Tier-3", 6.0,
                  ["React", "Node.js", "Python", "TypeScript", "MongoDB"],
                  ["TY", "FINAL"], ["CSE", "IT"], "Innovative startup"),

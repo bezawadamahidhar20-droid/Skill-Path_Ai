@@ -1,9 +1,10 @@
 'use client'
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Circle, Clock, Bot } from "lucide-react";
+import api from "@/lib/api";
 
 export interface RoadmapTaskItem {
   id: number | string;
@@ -22,6 +23,21 @@ interface JobReadinessRoadmapProps {
 
 export function JobReadinessRoadmap({ targetRole, tasks, onOpenAgent, onToggleTask }: JobReadinessRoadmapProps) {
   const [localTasks, setLocalTasks] = useState<RoadmapTaskItem[]>(tasks);
+
+  // Load saved task states from backend on mount
+  useEffect(() => {
+    api.get('/api/student/roadmap-tasks').then((res) => {
+      const savedTasks = res.data.tasks || [];
+      if (savedTasks.length > 0) {
+        setLocalTasks((prev) =>
+          prev.map((t) => {
+            const saved = savedTasks.find((s: any) => s.task_id === String(t.id));
+            return saved ? { ...t, status: saved.completed ? ("completed" as const) : t.status } : t;
+          })
+        );
+      }
+    }).catch(() => {});
+  }, []);
 
   const stages = [
     {
@@ -69,9 +85,21 @@ export function JobReadinessRoadmap({ targetRole, tasks, onOpenAgent, onToggleTa
   ];
 
   function handleToggle(taskId: number | string) {
-    setLocalTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: t.status === "completed" ? "not_started" : "completed" } : t))
-    );
+    setLocalTasks((prev) => {
+      const next = prev.map((t) =>
+        t.id === taskId ? { ...t, status: t.status === "completed" ? ("not_started" as const) : ("completed" as const) } : t
+      );
+      // Persist to backend
+      const toggledTask = next.find((t) => t.id === taskId);
+      if (toggledTask) {
+        api.post('/api/student/roadmap-tasks', {
+          task_id: String(toggledTask.id),
+          task_title: toggledTask.title,
+          completed: toggledTask.status === "completed",
+        }).catch(() => {});
+      }
+      return next;
+    });
     if (onToggleTask) {
       onToggleTask(taskId);
     }

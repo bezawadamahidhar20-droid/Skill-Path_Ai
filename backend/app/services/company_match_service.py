@@ -1,4 +1,37 @@
 from typing import Dict, List
+import re
+
+
+# Skill synonym mapping for fuzzy matching
+SKILL_SYNONYMS = {
+    "nodejs": "node.js",
+    "node": "node.js",
+    "reactjs": "react",
+    "react.js": "react",
+    "nextjs": "next.js",
+    "next": "next.js",
+    "ts": "typescript",
+    "js": "javascript",
+    "py": "python",
+    "c sharp": "c#",
+    "csharp": "c#",
+    "postgres": "sql",
+    "postgresql": "sql",
+    "mysql": "sql",
+    "mongo": "mongodb",
+    "k8s": "docker",
+    "gcp": "cloud",
+    "amazon web services": "aws",
+}
+
+
+def normalize_skill(skill: str) -> str:
+    """Normalize a skill name for comparison."""
+    s = skill.strip().lower()
+    s = SKILL_SYNONYMS.get(s, s)
+    # Remove common variations like "react.js" -> "react" if not in synonyms
+    s = s.replace(".js", "js") if s.endswith(".js") and s not in SKILL_SYNONYMS.values() else s
+    return s
 
 
 def match_student_with_companies(student: dict, companies: List[dict]) -> Dict:
@@ -20,9 +53,10 @@ def match_student_with_companies(student: dict, companies: List[dict]) -> Dict:
     }
     """
 
-    student_branch = student.get("branch")
+    student_branch = (student.get("branch") or "").upper()
+    student_year = (student.get("year") or "").upper()
     student_cgpa = student.get("cgpa", 0)
-    student_skills = set([s.lower() for s in student.get("skills", [])])
+    student_skills = set(normalize_skill(s) for s in student.get("skills", []))
 
     results = []
 
@@ -31,19 +65,23 @@ def match_student_with_companies(student: dict, companies: List[dict]) -> Dict:
         role = company.get("role")
         tier = company.get("tier")
 
-        allowed_branches = [b.upper() for b in company.get("allowed_branches", [])]
+        # Use the correct DB column names
+        eligible_branches = [b.upper() for b in company.get("eligible_branches", [])]
+        eligible_years = [y.upper() for y in company.get("eligible_years", [])]
         min_cgpa = company.get("min_cgpa", 0)
 
-        required_skills = [s.lower() for s in company.get("required_skills", [])]
-        preferred_skills = [s.lower() for s in company.get("preferred_skills", [])]
+        required_skills = [normalize_skill(s) for s in company.get("required_skills", [])]
 
         # ---------------- Branch Check ----------------
-        branch_allowed = student_branch in allowed_branches
+        branch_allowed = not eligible_branches or student_branch in eligible_branches
+
+        # ---------------- Year Check ----------------
+        year_allowed = not eligible_years or student_year in eligible_years
 
         # ---------------- CGPA Check ----------------
         cgpa_ok = student_cgpa is not None and student_cgpa >= min_cgpa
 
-        # ---------------- Skills Check ----------------
+        # ---------------- Skills Check (case-insensitive + synonym-aware) ----------------
         missing_required_skills = []
         for skill in required_skills:
             if skill not in student_skills:
@@ -52,19 +90,11 @@ def match_student_with_companies(student: dict, companies: List[dict]) -> Dict:
         required_ok = len(missing_required_skills) == 0
 
         # ---------------- Eligibility ----------------
-        eligible = branch_allowed and cgpa_ok and required_ok
+        eligible = branch_allowed and year_allowed and cgpa_ok and required_ok
 
         # ---------------- Match Percent ----------------
-        total_skills = len(required_skills) + len(preferred_skills)
-        matched_skills = 0
-
-        for skill in required_skills:
-            if skill in student_skills:
-                matched_skills += 1
-
-        for skill in preferred_skills:
-            if skill in student_skills:
-                matched_skills += 1
+        total_skills = len(required_skills)
+        matched_skills = sum(1 for s in required_skills if s in student_skills)
 
         if total_skills == 0:
             match_percent = 100
@@ -77,6 +107,7 @@ def match_student_with_companies(student: dict, companies: List[dict]) -> Dict:
             "tier": tier,
             "eligible": eligible,
             "branch_allowed": branch_allowed,
+            "year_allowed": year_allowed,
             "cgpa_required": min_cgpa,
             "student_cgpa": student_cgpa,
             "cgpa_ok": cgpa_ok,

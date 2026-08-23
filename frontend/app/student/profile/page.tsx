@@ -47,7 +47,7 @@ export default function StudentProfilePage() {
 
             const payload = {
                 branch: formData.branch,
-                year: parseInt(formData.year),
+                year: formData.year,
                 cgpa: parseFloat(formData.cgpa),
                 skills: skillsArray,
                 github_url: formData.github_url || undefined,
@@ -104,13 +104,12 @@ export default function StudentProfilePage() {
                                             <SelectValue placeholder="Select branch" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="CSE">Computer Science</SelectItem>
-                                            <SelectItem value="ECE">Electronics & Communication</SelectItem>
-                                            <SelectItem value="EE">Electrical Engineering</SelectItem>
-                                            <SelectItem value="ME">Mechanical Engineering</SelectItem>
-                                            <SelectItem value="CE">Civil Engineering</SelectItem>
-                                            <SelectItem value="IT">Information Technology</SelectItem>
-                                            <SelectItem value="Other">Other</SelectItem>
+                                            <SelectItem value="CSE">CSE</SelectItem>
+                                            <SelectItem value="IT">IT</SelectItem>
+                                            <SelectItem value="ECE">ECE</SelectItem>
+                                            <SelectItem value="EEE">EEE</SelectItem>
+                                            <SelectItem value="MECH">MECH</SelectItem>
+                                            <SelectItem value="CIVIL">CIVIL</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -128,10 +127,10 @@ export default function StudentProfilePage() {
                                             <SelectValue placeholder="Select year" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="1">1st Year</SelectItem>
-                                            <SelectItem value="2">2nd Year</SelectItem>
-                                            <SelectItem value="3">3rd Year</SelectItem>
-                                            <SelectItem value="4">4th Year</SelectItem>
+                                            <SelectItem value="FY">First Year (FY)</SelectItem>
+                                            <SelectItem value="SY">Second Year (SY)</SelectItem>
+                                            <SelectItem value="TY">Third Year (TY)</SelectItem>
+                                            <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

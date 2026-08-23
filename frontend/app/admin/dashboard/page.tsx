@@ -16,7 +16,7 @@ import {
     ResponsiveContainer,
     Cell
 } from 'recharts'
-import { Loader2, Sparkles, TrendingUp, Users, AlertTriangle, CheckCircle, Bot } from 'lucide-react'
+import { Loader2, Sparkles, TrendingUp, Users, AlertTriangle, CheckCircle, Bot, Grid3X3, Download, Search } from 'lucide-react'
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState<any>(null)
@@ -24,6 +24,10 @@ export default function AdminDashboard() {
     const [recommendations, setRecommendations] = useState<any>(null)
     const [loadingStats, setLoadingStats] = useState(true)
     const [loadingAI, setLoadingAI] = useState(false)
+    const [heatmapData, setHeatmapData] = useState<any[]>([])
+    const [students, setStudents] = useState<any[]>([])
+    const [studentSearch, setStudentSearch] = useState('')
+    const [loadingStudents, setLoadingStudents] = useState(false)
 
     useEffect(() => {
         fetchDashboardData()
@@ -38,6 +42,11 @@ export default function AdminDashboard() {
             ])
             setStats(summaryRes.data)
             setSkillsData(skillsRes.data.top_skills)
+            // Fetch heatmap data
+            try {
+                const heatmapRes = await api.get('/api/admin/dashboard/heatmap')
+                setHeatmapData(heatmapRes.data.heatmap || [])
+            } catch (e) { /* heatmap is optional */ }
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error)
         } finally {
@@ -199,6 +208,164 @@ export default function AdminDashboard() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Readiness Heatmap (Branch × Year) */}
+            {heatmapData.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center">
+                            <Grid3X3 className="mr-2 h-5 w-5 text-blue-600" /> Readiness Heatmap (Branch × Year)
+                        </CardTitle>
+                        <CardDescription>Average PRS scores across branches and academic years</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr>
+                                        <th className="px-4 py-2 text-left font-semibold text-gray-700">Branch \ Year</th>
+                                        {[...new Set(heatmapData.map((d: any) => d.year))].sort().map((year: any) => (
+                                            <th key={year} className="px-4 py-2 text-center font-semibold text-gray-700">{year}</th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...new Set(heatmapData.map((d: any) => d.branch))].sort().map((branch: any) => (
+                                        <tr key={branch}>
+                                            <td className="px-4 py-2 font-medium text-gray-900 border-t border-gray-100">{branch}</td>
+                                            {[...new Set(heatmapData.map((d: any) => d.year))].sort().map((year: any) => {
+                                                const cell = heatmapData.find((d: any) => d.branch === branch && d.year === year)
+                                                const avgPrs = cell ? cell.avg_prs : null
+                                                const bgColor = avgPrs === null ? 'bg-gray-50' : avgPrs >= 70 ? 'bg-green-100 text-green-800' : avgPrs >= 50 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                                                return (
+                                                    <td key={year} className={`px-4 py-2 text-center border-t border-gray-100 ${bgColor}`}>
+                                                        {avgPrs !== null ? (
+                                                            <span className="font-bold">{avgPrs}</span>
+                                                        ) : (
+                                                            <span className="text-gray-300">—</span>
+                                                        )}
+                                                    </td>
+                                                )
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Student Directory */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle className="flex items-center">
+                                <Users className="mr-2 h-5 w-5 text-blue-600" /> Student Directory
+                            </CardTitle>
+                            <CardDescription>Searchable list of all registered students</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by name, email, branch..."
+                                    value={studentSearch}
+                                    onChange={(e) => setStudentSearch(e.target.value)}
+                                    className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg w-64 focus:outline-none focus:border-blue-500"
+                                />
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                    setLoadingStudents(true)
+                                    try {
+                                        const res = await api.get('/api/admin/students/summary')
+                                        setStudents(res.data.students || [])
+                                    } catch (e) { console.error(e) }
+                                    setLoadingStudents(false)
+                                }}
+                                disabled={loadingStudents}
+                            >
+                                {loadingStudents ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Load Students
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {students.length === 0 ? (
+                        <div className="text-center py-12 text-gray-500">
+                            <Users className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                            <p className="text-sm font-medium">Click "Load Students" to view the student directory</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-gray-200">
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Name</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Email</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Branch</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Year</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">CGPA</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">PRS</th>
+                                        <th className="px-4 py-3 text-left font-semibold text-gray-700">Skills</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {students
+                                        .filter((s: any) => {
+                                            if (!studentSearch) return true
+                                            const q = studentSearch.toLowerCase()
+                                            return (
+                                                (s.name || '').toLowerCase().includes(q) ||
+                                                (s.email || '').toLowerCase().includes(q) ||
+                                                (s.branch || '').toLowerCase().includes(q) ||
+                                                (s.year || '').toLowerCase().includes(q)
+                                            )
+                                        })
+                                        .map((s: any, idx: number) => (
+                                            <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
+                                                <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
+                                                <td className="px-4 py-3 text-gray-600">{s.email}</td>
+                                                <td className="px-4 py-3"><Badge variant="outline">{s.branch || '—'}</Badge></td>
+                                                <td className="px-4 py-3 text-gray-600">{s.year || '—'}</td>
+                                                <td className="px-4 py-3 font-medium">{s.cgpa || '—'}</td>
+                                                <td className="px-4 py-3">
+                                                    {s.prs_score > 0 ? (
+                                                        <span className={`font-bold ${s.prs_score >= 70 ? 'text-green-600' : s.prs_score >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                            {s.prs_score}
+                                                        </span>
+                                                    ) : '—'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                                        {(s.skills || []).slice(0, 3).map((skill: string, i: number) => (
+                                                            <Badge key={i} variant="secondary" className="text-[10px]">{skill}</Badge>
+                                                        ))}
+                                                        {(s.skills || []).length > 3 && (
+                                                            <span className="text-xs text-gray-400">+{(s.skills || []).length - 3}</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                </tbody>
+                            </table>
+                            {students.filter((s: any) => {
+                                if (!studentSearch) return true
+                                const q = studentSearch.toLowerCase()
+                                return (s.name || '').toLowerCase().includes(q) || (s.email || '').toLowerCase().includes(q) || (s.branch || '').toLowerCase().includes(q)
+                            }).length === 0 && (
+                                <p className="text-center text-gray-500 py-6 text-sm">No students match "{studentSearch}"</p>
+                            )}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     )
 }
