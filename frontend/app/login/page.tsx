@@ -139,30 +139,13 @@ export default function LoginPage() {
     setAuthToken(token)
     setUserRole(role as 'admin' | 'student')
 
-    if (role === 'admin') {
-      router.push('/admin/dashboard')
-      return
-    }
+    const targetUrl = role === 'admin'
+      ? '/admin/dashboard'
+      : onboardingCompleted === false
+      ? '/onboarding'
+      : '/dashboard';
 
-    if (onboardingCompleted === false) {
-      router.push('/onboarding')
-      return
-    }
-
-    try {
-      const studentRes = await api.get("/api/student/me", {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      const studentData = studentRes.data
-
-      if (!studentData.onboarding_completed) {
-        router.push("/onboarding")
-      } else {
-        router.push("/dashboard")
-      }
-    } catch {
-      router.push("/dashboard")
-    }
+    window.location.href = targetUrl;
   }
 
   return (
