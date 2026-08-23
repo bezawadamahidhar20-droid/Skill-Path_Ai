@@ -8,6 +8,9 @@ import { PrioritySkills } from "./priority-skills";
 import { JobReadinessRoadmap, type RoadmapTaskItem } from "./job-readiness-roadmap";
 import { AIAgentCenter } from "./ai-agent-center";
 import { AIAgentWorkspace } from "./ai-agent-workspace";
+import { PRSRadarChart } from "./prs-radar-chart";
+import { PRSProgressChart } from "./prs-progress-chart";
+import { AgenticCopilot } from "./agentic-copilot";
 import type { PrioritizedSkill } from "@/lib/skill-classification";
 import type { AgentContext } from "@/lib/agents/context";
 
@@ -19,6 +22,7 @@ interface DashboardCommandCenterProps {
   prioritizedSkills: PrioritizedSkill[];
   roadmapTasks: RoadmapTaskItem[];
   agentContext: AgentContext;
+  prsBreakdown?: Record<string, number>;
   onRoleChange?: (newRole: string) => void;
   onAddTaskToRoadmap?: (task: { title: string; category: string; description: string }) => void;
 }
@@ -31,6 +35,7 @@ export function DashboardCommandCenter({
   prioritizedSkills,
   roadmapTasks,
   agentContext,
+  prsBreakdown,
   onRoleChange,
   onAddTaskToRoadmap,
 }: DashboardCommandCenterProps) {
@@ -52,10 +57,19 @@ export function DashboardCommandCenter({
         gapsCount={gapsCount}
       />
 
-      {/* 2. Target Career Goal Card */}
+      {/* 2. Visual Analytics Grid: Radar Chart & Historical Progress */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <PRSRadarChart studentBreakdown={prsBreakdown} targetRole={targetRole} />
+        <PRSProgressChart currentScore={readinessScore} />
+      </div>
+
+      {/* 3. Agentic Placement Co-Pilot & STAR Mock Interviewer */}
+      <AgenticCopilot />
+
+      {/* 4. Target Career Goal Card */}
       <CareerTargetCard targetRole={targetRole} onRoleChange={onRoleChange} />
 
-      {/* 3. Your Next Best Action */}
+      {/* 5. Your Next Best Action */}
       {topSkillGap ? (
         <NextBestAction
           topSkill={topSkillGap}
@@ -63,21 +77,21 @@ export function DashboardCommandCenter({
         />
       ) : null}
 
-      {/* 4. Priority Skill Readiness Matrix */}
+      {/* 6. Priority Skill Readiness Matrix */}
       <PrioritySkills
         skills={prioritizedSkills}
         targetRole={targetRole}
         onOpenAgent={(agentId) => setActiveAgentModalId(agentId)}
       />
 
-      {/* 5. Job-Readiness Employment Roadmap (6 Stages) */}
+      {/* 7. Job-Readiness Employment Roadmap (6 Stages) */}
       <JobReadinessRoadmap
         targetRole={targetRole}
         tasks={roadmapTasks}
         onOpenAgent={(agentId) => setActiveAgentModalId(agentId)}
       />
 
-      {/* 6. AI Career Preparation Team (8 Specialized Agents) */}
+      {/* 8. AI Career Preparation Team (8 Specialized Agents) */}
       <AIAgentCenter onOpenAgent={(agentId) => setActiveAgentModalId(agentId)} />
 
       {/* Interactive AI Agent Workspace Dialog */}

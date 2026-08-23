@@ -202,11 +202,16 @@ export function HeroSection() {
               ))}
             </div>
 
-            {/* CTA Button */}
-            <div ref={ctaRef}>
+            {/* CTA Buttons */}
+            <div ref={ctaRef} className="flex flex-wrap items-center gap-4">
               <Link href="/login">
                 <Button className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-6 rounded-full font-semibold hover:shadow-2xl hover:shadow-blue-400 transition-all duration-300 text-lg">
                   Get Started
+                </Button>
+              </Link>
+              <Link href="/login">
+                <Button variant="outline" className="border-amber-500/50 bg-amber-50/50 text-amber-900 px-6 py-6 rounded-full font-semibold hover:bg-amber-100 transition-all text-base flex items-center gap-2">
+                  <span>⚡ 1-Click Judge Demo Mode</span>
                 </Button>
               </Link>
             </div>

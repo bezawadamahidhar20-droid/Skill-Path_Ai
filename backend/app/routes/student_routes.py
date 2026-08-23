@@ -1,73 +1,95 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from datetime import datetime, timedelta, timezone
+import json
 
 from app.database import get_pool
 from app.utils.auth_dependency import get_current_user
 from app.models.student_model import StudentUpdate, StudentOnboarding
+from app.models.schemas import AgentQuerySchema
+from app.utils.rate_limiter import rate_limit
+from app.services.agent_service import run_placement_agent_workflow
 
 router = APIRouter()
-
 
 @router.get("/me")
 async def get_my_profile(user=Depends(get_current_user)):
     email = user["email"]
     pool = await get_pool()
 
-    student = await pool.fetchrow(
-        """SELECT id, name, email, year, branch, cgpa, skills, skills_with_levels, linkedin_url, github_url,
-                  avatar_url, provider, onboarding_completed, target_role,
-                  role, prs_score, prs_level, prs_breakdown, github_analysis, 
-                  github_groq_analysis, resume_analysis, ats_score
-           FROM students WHERE email = $1""",
-        email,
-    )
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+    try:
+        student = await pool.fetchrow(
+            """SELECT id, name, email, year, branch, cgpa, skills, skills_with_levels, linkedin_url, github_url,
+                      avatar_url, provider, onboarding_completed, target_role,
+                      role, prs_score, prs_level, prs_breakdown, github_analysis, 
+                      github_groq_analysis, resume_analysis, ats_score
+               FROM students WHERE email = $1""",
+            email,
+        )
+        if not student:
+            raise HTTPException(status_code=404, detail="Student profile not found")
 
-    # Convert to dict and handle JSON/array fields
-    result = dict(student)
-    result["id"] = str(result["id"])
-    
-    # Convert skills from PostgreSQL array to Python list
-    if result.get("skills") is None:
-        result["skills"] = []
-    else:
-        result["skills"] = list(result["skills"])
-    
-    # Convert JSONB fields from string to dict if needed
-    import json
-    for field in ["prs_breakdown", "github_analysis", "github_groq_analysis", "resume_analysis", "skills_with_levels"]:
-        val = result.get(field)
-        if isinstance(val, str):
-            try:
-                result[field] = json.loads(val)
-            except (json.JSONDecodeError, TypeError):
-                result[field] = [] if field == "skills_with_levels" else None
+        result = dict(student)
+        result["id"] = str(result["id"])
+        
+        if result.get("skills") is None:
+            result["skills"] = []
+        else:
+            result["skills"] = list(result["skills"])
+        
+        for field in ["prs_breakdown", "github_analysis", "github_groq_analysis", "resume_analysis", "skills_with_levels"]:
+            val = result.get(field)
+            if isinstance(val, str):
+                try:
+                    result[field] = json.loads(val)
+                except (json.JSONDecodeError, TypeError):
+                    result[field] = [] if field == "skills_with_levels" else None
 
-    return result
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch profile: {str(exc)}")
 
 
-@router.put("/onboarding")
+@router.put("/onboarding", dependencies=[Depends(rate_limit(max_requests=20, window_seconds=60))])
 async def submit_onboarding(data: StudentOnboarding, user=Depends(get_current_user)):
+    """
+    Idempotent Onboarding handler. Uses PostgreSQL row locking to prevent race conditions.
+    """
     email = user["email"]
     pool = await get_pool()
-    import json
 
-    await pool.execute(
-        """UPDATE students 
-           SET year = $1, branch = $2, cgpa = $3, skills = $4,
-               skills_with_levels = $5::jsonb, target_role = $6, onboarding_completed = TRUE
-           WHERE email = $7""",
-        data.year,
-        data.branch,
-        data.cgpa,
-        data.skills,
-        json.dumps(data.skills_with_levels),
-        data.target_role,
-        email,
-    )
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Row lock to prevent race condition double-submit
+            student = await conn.fetchrow(
+                "SELECT id, onboarding_completed FROM students WHERE email = $1 FOR UPDATE",
+                email
+            )
+            if not student:
+                raise HTTPException(status_code=404, detail="Student record not found")
 
-    return {"message": "Onboarding completed successfully"}
+            await conn.execute(
+                """UPDATE students 
+                   SET year = $1, branch = $2, cgpa = $3, skills = $4,
+                       skills_with_levels = $5::jsonb, target_role = $6, onboarding_completed = TRUE
+                   WHERE email = $7""",
+                data.year,
+                data.branch,
+                data.cgpa,
+                data.skills,
+                json.dumps(data.skills_with_levels),
+                data.target_role,
+                email,
+            )
+
+    # Automatically trigger PRS calculation after onboarding completion
+    try:
+        await calculate_student_prs(user)
+    except Exception as e:
+        pass
+
+    return {"message": "Onboarding completed successfully", "onboarding_completed": True}
 
 
 @router.put("/update")
@@ -75,127 +97,59 @@ async def update_profile(update_data: StudentUpdate, user=Depends(get_current_us
     email = user["email"]
     pool = await get_pool()
 
-    existing = await pool.fetchrow("SELECT id FROM students WHERE email = $1", email)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    # Build dynamic update
-    updates = []
-    values = []
-    idx = 2  # $1 is email
-
-    if update_data.cgpa is not None:
-        updates.append(f"cgpa = ${idx}")
-        values.append(update_data.cgpa)
-        idx += 1
-
-    if update_data.skills is not None:
-        updates.append(f"skills = ${idx}")
-        values.append(update_data.skills)
-        idx += 1
-
-    if update_data.linkedin_url is not None:
-        updates.append(f"linkedin_url = ${idx}")
-        values.append(update_data.linkedin_url)
-        idx += 1
-
-    if update_data.github_url is not None:
-        updates.append(f"github_url = ${idx}")
-        values.append(update_data.github_url)
-        idx += 1
-
-    if update_data.resume_analysis is not None:
-        import json
-        updates.append(f"resume_analysis = ${idx}::jsonb")
-        values.append(json.dumps(update_data.resume_analysis))
-        idx += 1
-
-    if update_data.ats_score is not None:
-        updates.append(f"ats_score = ${idx}")
-        values.append(update_data.ats_score)
-        idx += 1
-
-    if updates:
-        query = f"UPDATE students SET {', '.join(updates)} WHERE email = $1"
-        await pool.execute(query, email, *values)
-
-    return {"message": "Profile updated successfully"}
-
-
-@router.post("/analyze/github")
-async def analyze_my_github(user=Depends(get_current_user)):
-    email = user["email"]
-    pool = await get_pool()
-
-    student = await pool.fetchrow("SELECT * FROM students WHERE email = $1", email)
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    # Cache check (24 hours)
-    existing_analysis = student.get("github_analysis")
-    if existing_analysis:
-        import json
-        if isinstance(existing_analysis, str):
-            existing_analysis = json.loads(existing_analysis)
-        if existing_analysis and existing_analysis.get("last_updated"):
-            last_updated = datetime.fromisoformat(existing_analysis["last_updated"])
-            if datetime.now(timezone.utc) - last_updated < timedelta(hours=24):
-                return {
-                    "message": "GitHub analysis already cached (last 24 hours)",
-                    "github_analysis": existing_analysis,
-                }
-
-    github_url = student.get("github_url")
-    if not github_url:
-        raise HTTPException(status_code=400, detail="GitHub URL not set in profile")
-
     try:
-        from app.services.github_service import analyze_github_profile
-        analysis = analyze_github_profile(github_url)
-        analysis["last_updated"] = datetime.now(timezone.utc).isoformat()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        existing = await pool.fetchrow("SELECT id FROM students WHERE email = $1", email)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Student not found")
 
-    import json
-    await pool.execute(
-        "UPDATE students SET github_analysis = $1::jsonb WHERE email = $2",
-        json.dumps(analysis),
-        email,
-    )
+        updates = []
+        values = []
+        idx = 2
 
-    return {"message": "GitHub analysis completed", "github_analysis": analysis}
+        if update_data.cgpa is not None:
+            updates.append(f"cgpa = ${idx}")
+            values.append(update_data.cgpa)
+            idx += 1
 
+        if update_data.skills is not None:
+            updates.append(f"skills = ${idx}")
+            values.append(update_data.skills)
+            idx += 1
 
-@router.post("/analyze/resume")
-async def analyze_student_resume(
-    file: UploadFile = File(...),
-    user=Depends(get_current_user),
-):
-    email = user["email"]
-    pool = await get_pool()
+        if update_data.target_role is not None:
+            updates.append(f"target_role = ${idx}")
+            values.append(update_data.target_role)
+            idx += 1
 
-    try:
-        contents = await file.read()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid file")
+        if update_data.linkedin_url is not None:
+            updates.append(f"linkedin_url = ${idx}")
+            values.append(update_data.linkedin_url)
+            idx += 1
 
-    from app.services.resume_service import analyze_resume
-    analysis_result = analyze_resume(contents, file.content_type)
-    ats_score = analysis_result.get("ats_score", 0)
+        if update_data.github_url is not None:
+            updates.append(f"github_url = ${idx}")
+            values.append(update_data.github_url)
+            idx += 1
 
-    import json
-    await pool.execute(
-        "UPDATE students SET resume_analysis = $1::jsonb, ats_score = $2 WHERE email = $3",
-        json.dumps(analysis_result),
-        ats_score,
-        email,
-    )
+        if update_data.resume_analysis is not None:
+            updates.append(f"resume_analysis = ${idx}::jsonb")
+            values.append(json.dumps(update_data.resume_analysis))
+            idx += 1
 
-    return {
-        "message": "Resume analyzed successfully",
-        "ats_score": ats_score,
-        "analysis": analysis_result,
-    }
+        if update_data.ats_score is not None:
+            updates.append(f"ats_score = ${idx}")
+            values.append(update_data.ats_score)
+            idx += 1
+
+        if updates:
+            query = f"UPDATE students SET {', '.join(updates)} WHERE email = $1"
+            await pool.execute(query, email, *values)
+
+        return {"message": "Profile updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Update failed: {str(exc)}")
 
 
 @router.post("/calculate-prs")
@@ -203,20 +157,15 @@ async def calculate_student_prs(user=Depends(get_current_user)):
     email = user["email"]
     pool = await get_pool()
 
-    student = await pool.fetchrow(
-        """SELECT * FROM students WHERE email = $1""",
-        email,
-    )
+    student = await pool.fetchrow("SELECT * FROM students WHERE email = $1", email)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
     from app.services.prs_service import calculate_prs
     
-    # Convert student dict for prs_service
     student_dict = dict(student)
     student_dict["skills"] = list(student_dict.get("skills", []))
     
-    import json
     for field in ["github_analysis", "github_groq_analysis", "resume_analysis", "prs_breakdown"]:
         val = student_dict.get(field)
         if isinstance(val, str):
@@ -240,7 +189,104 @@ async def calculate_student_prs(user=Depends(get_current_user)):
         "message": "PRS calculated successfully",
         "prs_score": prs_result["prs_score"],
         "prs_level": prs_result["prs_level"],
+        "target_role_match_pct": prs_result.get("target_role_match_pct", 75),
         "prs_breakdown": prs_result["breakdown"],
+        "skill_gap_vector": prs_result.get("skill_gap_vector", {})
+    }
+
+
+@router.post("/agent/execute", dependencies=[Depends(rate_limit(max_requests=30, window_seconds=60))])
+async def execute_agent_query(payload: AgentQuerySchema, user=Depends(get_current_user)):
+    """
+    Multi-step Agentic Placement Co-Pilot & STAR Mock Interviewer Agent endpoint.
+    """
+    email = user["email"]
+    pool = await get_pool()
+
+    try:
+        res = await run_placement_agent_workflow(
+            email=email,
+            agent_id=payload.agent_id,
+            message=payload.message,
+            mode=payload.mode or "chat",
+            interview_step=payload.interview_step or 0,
+            answer_text=payload.answer_text or "",
+            pool=pool
+        )
+        return {"success": True, "result": res}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(exc)}")
+
+
+@router.post("/analyze/github")
+async def analyze_my_github(user=Depends(get_current_user)):
+    email = user["email"]
+    pool = await get_pool()
+
+    student = await pool.fetchrow("SELECT * FROM students WHERE email = $1", email)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    existing_analysis = student.get("github_analysis")
+    if existing_analysis:
+        if isinstance(existing_analysis, str):
+            existing_analysis = json.loads(existing_analysis)
+        if existing_analysis and existing_analysis.get("last_updated"):
+            last_updated = datetime.fromisoformat(existing_analysis["last_updated"])
+            if datetime.now(timezone.utc) - last_updated < timedelta(hours=24):
+                return {
+                    "message": "GitHub analysis already cached (last 24 hours)",
+                    "github_analysis": existing_analysis,
+                }
+
+    github_url = student.get("github_url")
+    if not github_url:
+        raise HTTPException(status_code=400, detail="GitHub URL not set in profile")
+
+    try:
+        from app.services.github_service import analyze_github_profile
+        analysis = analyze_github_profile(github_url)
+        analysis["last_updated"] = datetime.now(timezone.utc).isoformat()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GitHub analysis failed: {str(e)}")
+
+    await pool.execute(
+        "UPDATE students SET github_analysis = $1::jsonb WHERE email = $2",
+        json.dumps(analysis),
+        email,
+    )
+
+    return {"message": "GitHub analysis completed", "github_analysis": analysis}
+
+
+@router.post("/analyze/resume")
+async def analyze_student_resume(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    email = user["email"]
+    pool = await get_pool()
+
+    try:
+        contents = await file.read()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid file uploaded")
+
+    from app.services.resume_service import analyze_resume
+    analysis_result = analyze_resume(contents, file.content_type)
+    ats_score = analysis_result.get("ats_score", 0)
+
+    await pool.execute(
+        "UPDATE students SET resume_analysis = $1::jsonb, ats_score = $2 WHERE email = $3",
+        json.dumps(analysis_result),
+        ats_score,
+        email,
+    )
+
+    return {
+        "message": "Resume analyzed successfully",
+        "ats_score": ats_score,
+        "analysis": analysis_result,
     }
 
 
@@ -249,17 +295,13 @@ async def company_match(user=Depends(get_current_user)):
     email = user["email"]
     pool = await get_pool()
 
-    student = await pool.fetchrow(
-        "SELECT * FROM students WHERE email = $1",
-        email,
-    )
+    student = await pool.fetchrow("SELECT * FROM students WHERE email = $1", email)
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
     companies = await pool.fetch("SELECT * FROM companies")
     companies_list = [dict(c) for c in companies]
     
-    # Convert arrays
     for c in companies_list:
         c["required_skills"] = list(c.get("required_skills", []))
         c["eligible_years"] = list(c.get("eligible_years", []))
@@ -270,7 +312,6 @@ async def company_match(user=Depends(get_current_user)):
     student_dict = dict(student)
     student_dict["skills"] = list(student_dict.get("skills", []))
     
-    import json
     for field in ["github_analysis", "resume_analysis"]:
         val = student_dict.get(field)
         if isinstance(val, str):
@@ -288,7 +329,7 @@ async def company_match(user=Depends(get_current_user)):
         ai_analysis = {
             "profile_strengths": ["AI analysis unavailable"],
             "profile_weaknesses": [],
-            "overall_profile_summary": f"AI analysis failed: {str(e)}",
+            "overall_profile_summary": f"AI analysis notice: {str(e)}",
             "company_insights": [],
             "top_priority_actions": [],
             "recommended_companies_to_focus": [],
@@ -302,63 +343,8 @@ async def company_match(user=Depends(get_current_user)):
     }
 
 
-@router.post("/analyze/github-detailed")
-async def analyze_github_detailed(user=Depends(get_current_user)):
-    email = user["email"]
-    pool = await get_pool()
-
-    student = await pool.fetchrow("SELECT * FROM students WHERE email = $1", email)
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    import json
-    github_analysis = student.get("github_analysis")
-    if isinstance(github_analysis, str):
-        github_analysis = json.loads(github_analysis)
-    if not github_analysis:
-        raise HTTPException(
-            status_code=400,
-            detail="Please run basic GitHub analysis first before requesting detailed analysis",
-        )
-
-    existing_groq = student.get("github_groq_analysis")
-    if isinstance(existing_groq, str):
-        existing_groq = json.loads(existing_groq)
-    if existing_groq and existing_groq.get("last_updated"):
-        last_updated = datetime.fromisoformat(existing_groq["last_updated"])
-        if datetime.now(timezone.utc) - last_updated < timedelta(hours=24):
-            return {
-                "message": "Detailed analysis already cached (last 24 hours)",
-                "groq_analysis": existing_groq,
-            }
-
-    from app.services.groq_service import analyze_github_with_groq
-    try:
-        groq_analysis = analyze_github_with_groq(github_analysis)
-        groq_analysis["last_updated"] = datetime.now(timezone.utc).isoformat()
-        await pool.execute(
-            "UPDATE students SET github_groq_analysis = $1::jsonb WHERE email = $2",
-            json.dumps(groq_analysis),
-            email,
-        )
-        return {"message": "Detailed GitHub analysis completed", "groq_analysis": groq_analysis}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Groq analysis failed: {str(e)}")
-
-
-@router.delete("/analyze/github-detailed/cache")
-async def clear_groq_cache(user=Depends(get_current_user)):
-    email = user["email"]
-    pool = await get_pool()
-    await pool.execute(
-        "UPDATE students SET github_groq_analysis = NULL WHERE email = $1", email
-    )
-    return {"message": "Groq analysis cache cleared successfully"}
-
-
 @router.get("/roadmap-tasks")
 async def get_roadmap_tasks(user=Depends(get_current_user)):
-    """Get all saved roadmap task states for the current user."""
     email = user["email"]
     pool = await get_pool()
 
@@ -375,7 +361,6 @@ async def get_roadmap_tasks(user=Depends(get_current_user)):
 
 @router.post("/roadmap-tasks")
 async def save_roadmap_task(task: dict, user=Depends(get_current_user)):
-    """Save/update a single roadmap task state."""
     email = user["email"]
     pool = await get_pool()
 
@@ -397,28 +382,3 @@ async def save_roadmap_task(task: dict, user=Depends(get_current_user)):
     """, student["id"], task_id, task_title, completed)
 
     return {"message": "Task updated successfully"}
-
-
-@router.post("/roadmap-tasks/bulk")
-async def save_roadmap_tasks_bulk(tasks: list, user=Depends(get_current_user)):
-    """Save/update multiple roadmap task states at once."""
-    email = user["email"]
-    pool = await get_pool()
-
-    student = await pool.fetchrow("SELECT id FROM students WHERE email = $1", email)
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    for t in tasks:
-        task_id = t.get("task_id")
-        completed = t.get("completed", False)
-        task_title = t.get("task_title", "")
-        if not task_id:
-            continue
-        await pool.execute("""
-            INSERT INTO roadmap_tasks (student_id, task_id, task_title, completed, updated_at)
-            VALUES ($1, $2, $3, $4, NOW())
-            ON CONFLICT (student_id, task_id) DO UPDATE SET completed = $4, updated_at = NOW()
-        """, student["id"], task_id, task_title, completed)
-
-    return {"message": f"{len(tasks)} tasks updated successfully"}

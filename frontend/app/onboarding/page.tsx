@@ -287,17 +287,23 @@ export default function OnboardingPage() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="year" className="font-semibold text-gray-700">
-                        Academic Year
+                        Pass Out Year
                       </Label>
                       <Select value={year} onValueChange={setYear}>
                         <SelectTrigger className="h-12 border-gray-200 rounded-xl">
-                          <SelectValue placeholder="Select Year" />
+                          <SelectValue placeholder="Select Pass Out Year" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="FY">First Year (FY)</SelectItem>
-                          <SelectItem value="SY">Second Year (SY)</SelectItem>
-                          <SelectItem value="TY">Third Year (TY)</SelectItem>
+                          <SelectItem value="2024">2024 (Passed Out)</SelectItem>
+                          <SelectItem value="2025">2025 (Passed Out / Batch 2025)</SelectItem>
+                          <SelectItem value="2026">2026 (Final Year)</SelectItem>
+                          <SelectItem value="2027">2027 (Third Year)</SelectItem>
+                          <SelectItem value="2028">2028 (Second Year)</SelectItem>
+                          <SelectItem value="Passed Out">Passed Out</SelectItem>
                           <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
+                          <SelectItem value="TY">Third Year (TY)</SelectItem>
+                          <SelectItem value="SY">Second Year (SY)</SelectItem>
+                          <SelectItem value="FY">First Year (FY)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

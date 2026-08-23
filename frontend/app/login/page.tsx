@@ -32,26 +32,28 @@ export default function LoginPage() {
     setIsSocialLoading("google")
     setError("")
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    if (!googleClientId) {
-      setError("Google OAuth Client ID is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your environment (.env) file.")
+    if (!googleClientId || googleClientId.trim() === "" || googleClientId.includes("demo_") || googleClientId.includes("your_google_client_id")) {
+      setError("To log in with your real Google account, please set your NEXT_PUBLIC_GOOGLE_CLIENT_ID in frontend/.env from Google Cloud Console.")
       setIsSocialLoading(null)
       return
     }
+
     const redirectUri = `${window.location.origin}/api/auth/google/callback`
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile`
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(googleClientId.trim())}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile`
   }
 
   const handleGithubAuth = async () => {
     setIsSocialLoading("github")
     setError("")
     const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID
-    if (!githubClientId) {
-      setError("GitHub OAuth Client ID is not configured. Please set NEXT_PUBLIC_GITHUB_CLIENT_ID in your environment (.env) file.")
+    if (!githubClientId || githubClientId.trim() === "" || githubClientId.includes("demo_") || githubClientId.includes("your_github_client_id")) {
+      setError("To log in with your real GitHub account, please set your NEXT_PUBLIC_GITHUB_CLIENT_ID in frontend/.env from GitHub Developer Settings.")
       setIsSocialLoading(null)
       return
     }
+
     const redirectUri = `${window.location.origin}/api/auth/github/callback`
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(githubClientId.trim())}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`
   }
 
   const [formData, setFormData] = useState({
@@ -188,6 +190,33 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="pt-8 px-8 max-h-[75vh] overflow-y-auto">
+            {/* Hackathon Judge Demo Mode Quick Button */}
+            <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-emerald-500/10 border border-amber-500/30 text-center space-y-2">
+              <span className="text-xs font-bold text-amber-700 uppercase tracking-wider block">
+                🏆 Hackathon Judge Fast Track
+              </span>
+              <Button
+                type="button"
+                onClick={async () => {
+                  setIsLoading(true);
+                  try {
+                    const res = await api.post("/api/auth/demo");
+                    if (res.data?.access_token) {
+                      await handleAuthSuccess(res.data.access_token, "student", true);
+                    }
+                  } catch (e: any) {
+                    setError("Demo login failed: " + (e.response?.data?.detail || e.message));
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-600 hover:to-indigo-700 text-white font-bold py-3 rounded-lg shadow-md hover:scale-[1.02] transition-all text-sm flex items-center justify-center gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                ⚡ One-Click Judge Demo Mode (Explore in &lt; 60s)
+              </Button>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-5">
 
               {!isLogin && (
@@ -263,17 +292,23 @@ export default function LoginPage() {
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <GraduationCap className="h-4 w-4 text-blue-500" />
-                        Year
+                        Pass Out Year
                       </Label>
                       <Select value={formData.year} onValueChange={(val) => handleSelectChange('year', val)} required>
                         <SelectTrigger className="h-12 text-base border-gray-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl">
-                          <SelectValue placeholder="Select Year" />
+                          <SelectValue placeholder="Select Pass Out Year" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="FY">First Year (FY)</SelectItem>
-                          <SelectItem value="SY">Second Year (SY)</SelectItem>
-                          <SelectItem value="TY">Third Year (TY)</SelectItem>
+                          <SelectItem value="2024">2024 (Passed Out)</SelectItem>
+                          <SelectItem value="2025">2025 (Passed Out / Batch 2025)</SelectItem>
+                          <SelectItem value="2026">2026 (Final Year)</SelectItem>
+                          <SelectItem value="2027">2027 (Third Year)</SelectItem>
+                          <SelectItem value="2028">2028 (Second Year)</SelectItem>
+                          <SelectItem value="Passed Out">Passed Out</SelectItem>
                           <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
+                          <SelectItem value="TY">Third Year (TY)</SelectItem>
+                          <SelectItem value="SY">Second Year (SY)</SelectItem>
+                          <SelectItem value="FY">First Year (FY)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

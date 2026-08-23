@@ -194,17 +194,23 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
                                 <div className="grid gap-2">
                                     <Label className="text-sm font-semibold flex items-center gap-2">
                                         <GraduationCap className="h-4 w-4 text-blue-500" />
-                                        Year
+                                        Pass Out Year
                                     </Label>
                                     <Select value={formData.year} onValueChange={(val) => handleSelectChange('year', val)}>
                                         <SelectTrigger className="h-12 text-base rounded-xl">
-                                            <SelectValue placeholder="Select Year" />
+                                            <SelectValue placeholder="Select Pass Out Year" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                        <SelectItem value="FY">First Year (FY)</SelectItem>
-                                        <SelectItem value="SY">Second Year (SY)</SelectItem>
-                                        <SelectItem value="TY">Third Year (TY)</SelectItem>
-                                        <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
+                                            <SelectItem value="2024">2024 (Passed Out)</SelectItem>
+                                            <SelectItem value="2025">2025 (Passed Out / Batch 2025)</SelectItem>
+                                            <SelectItem value="2026">2026 (Final Year)</SelectItem>
+                                            <SelectItem value="2027">2027 (Third Year)</SelectItem>
+                                            <SelectItem value="2028">2028 (Second Year)</SelectItem>
+                                            <SelectItem value="Passed Out">Passed Out</SelectItem>
+                                            <SelectItem value="FINAL">Final Year (FINAL)</SelectItem>
+                                            <SelectItem value="TY">Third Year (TY)</SelectItem>
+                                            <SelectItem value="SY">Second Year (SY)</SelectItem>
+                                            <SelectItem value="FY">First Year (FY)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

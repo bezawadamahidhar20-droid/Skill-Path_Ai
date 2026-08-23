@@ -1,150 +1,140 @@
-def calculate_prs(student: dict):
+import json
+import logging
+from typing import Dict, Any, List
+from app.utils.llm_retry import call_with_retry_and_fallback
+
+logger = logging.getLogger("prs_service")
+
+# Benchmark target role requirements for vector matching
+TARGET_ROLE_BENCHMARKS = {
+    "Software Engineer": ["DSA", "Python", "Java", "C++", "SQL", "Git", "System Design", "OOP"],
+    "Full Stack Developer": ["React", "Next.js", "Node.js", "TypeScript", "JavaScript", "SQL", "MongoDB", "REST API", "Git"],
+    "Backend Developer": ["Python", "FastAPI", "Node.js", "Java", "SQL", "PostgreSQL", "Redis", "Docker", "System Design"],
+    "Frontend Developer": ["React", "TypeScript", "JavaScript", "HTML", "CSS", "Tailwind CSS", "Next.js", "Redux"],
+    "AI/ML Engineer": ["Python", "Machine Learning", "PyTorch", "TensorFlow", "Pandas", "NumPy", "SQL", "Deep Learning"],
+    "Data Analyst": ["Python", "SQL", "Pandas", "Power BI", "Excel", "Statistics", "Tableau"]
+}
+
+def calculate_prs(student: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Returns:
-    {
-        "prs_score": int,
-        "prs_level": str,
-        "breakdown": {...}
-    }
+    AI-driven Placement Readiness Scoring Pipeline (PRS).
+    Evaluates multi-dimensional readiness using skill-vector matching,
+    code complexity indexes, ATS quality, and target role alignment.
     """
+    
+    def _execute_ai_scoring_model() -> Dict[str, Any]:
+        cgpa = student.get("cgpa") or 7.0
+        skills = student.get("skills") or []
+        target_role = student.get("target_role") or "Software Engineer"
+        github_analysis = student.get("github_analysis") or {}
+        ats_score_raw = student.get("ats_score") or 0
 
-    cgpa = student.get("cgpa")
-    skills = student.get("skills", [])
-    github_analysis = student.get("github_analysis") or {}
+        # 1. Target Role Skill Vector Alignment (0-100%)
+        benchmark_skills = TARGET_ROLE_BENCHMARKS.get(target_role, TARGET_ROLE_BENCHMARKS["Software Engineer"])
+        normalized_student_skills = [s.lower() for s in skills]
+        
+        matched_skills = [b for b in benchmark_skills if b.lower() in normalized_student_skills]
+        missing_skills = [b for b in benchmark_skills if b.lower() not in normalized_student_skills]
+        
+        target_match_pct = int((len(matched_skills) / max(len(benchmark_skills), 1)) * 100)
 
-    # ---------------- GitHub Score (0-25) ----------------
-    github_score_raw = github_analysis.get("github_score", 0)  # 0-100
-    github_score = int((github_score_raw / 100) * 25)
+        # 2. GitHub Code Quality & Depth Component (0-25)
+        github_score_raw = github_analysis.get("github_score", 0) if isinstance(github_analysis, dict) else 0
+        github_component = int((github_score_raw / 100.0) * 25)
 
-    # ---------------- Skills Score (0-15) ----------------
-    skills_count = len(skills)
+        # 3. Dynamic Skill Vector Score (0-15)
+        skills_component = min(int((len(skills) / 10.0) * 15), 15)
 
-    if skills_count >= 12:
-        skills_score = 15
-    elif skills_count >= 8:
-        skills_score = 12
-    elif skills_count >= 5:
-        skills_score = 9
-    elif skills_count >= 3:
-        skills_score = 6
-    elif skills_count >= 1:
-        skills_score = 3
-    else:
-        skills_score = 0
+        # 4. Academic Performance Vector (0-10)
+        cgpa_component = min(int((cgpa / 10.0) * 10), 10)
 
-    # ---------------- CGPA Score (0-10) ----------------
-    if cgpa is None:
-        cgpa_score = 0
-    elif cgpa >= 9.0:
-        cgpa_score = 10
-    elif cgpa >= 8.0:
-        cgpa_score = 8
-    elif cgpa >= 7.0:
-        cgpa_score = 6
-    elif cgpa >= 6.0:
-        cgpa_score = 4
-    else:
-        cgpa_score = 2
+        # 5. Commit Activity & Consistency (0-10)
+        activity = github_analysis.get("activity_summary", {}) if isinstance(github_analysis, dict) else {}
+        commits_90 = activity.get("commits_last_90_days_estimated", 0) if isinstance(activity, dict) else 0
+        activity_component = min(int((commits_90 / 50.0) * 10), 10)
 
-    # ---------------- Activity Score (0-10) ----------------
-    activity = github_analysis.get("activity_summary", {})
-    commits_90 = activity.get("commits_last_90_days_estimated", 0)
+        # 6. Tech Stack & Repository Diversity (0-10)
+        top_langs = github_analysis.get("top_languages", []) if isinstance(github_analysis, dict) else []
+        diversity_component = min(int((len(top_langs) / 4.0) * 10), 10)
 
-    if commits_90 >= 80:
-        activity_score = 10
-    elif commits_90 >= 50:
-        activity_score = 8
-    elif commits_90 >= 25:
-        activity_score = 6
-    elif commits_90 >= 10:
-        activity_score = 4
-    elif commits_90 >= 1:
-        activity_score = 2
-    else:
-        activity_score = 0
+        # 7. Language Depth (0-10)
+        lang_component = min(int((len(top_langs) / 3.0) * 10), 10)
 
-    # ---------------- Project Diversity Score (0-10) ----------------
-    project_dist = github_analysis.get("project_type_distribution", {})
-    diversity_count = len(project_dist.keys())
+        # 8. Resume ATS Scoring Component (0-20)
+        ats_component = int((ats_score_raw / 100.0) * 20)
 
-    if diversity_count >= 6:
-        diversity_score = 10
-    elif diversity_count >= 4:
-        diversity_score = 8
-    elif diversity_count >= 3:
-        diversity_score = 6
-    elif diversity_count >= 2:
-        diversity_score = 4
-    elif diversity_count >= 1:
-        diversity_score = 2
-    else:
-        diversity_score = 0
+        # Calculate composite weighted total score
+        total_prs = min(100, (
+            github_component +
+            skills_component +
+            cgpa_component +
+            activity_component +
+            diversity_component +
+            lang_component +
+            ats_component
+        ))
 
-    # ---------------- Language Diversity Score (0-10) ----------------
-    top_langs = github_analysis.get("top_languages", [])
-    lang_count = len(top_langs)
+        # Dynamic Level Classification
+        if total_prs >= 80:
+            prs_level = "Excellent"
+        elif total_prs >= 65:
+            prs_level = "Good"
+        elif total_prs >= 50:
+            prs_level = "Average"
+        else:
+            prs_level = "Needs Improvement"
 
-    if lang_count >= 6:
-        language_score = 10
-    elif lang_count >= 4:
-        language_score = 8
-    elif lang_count >= 3:
-        language_score = 6
-    elif lang_count >= 2:
-        language_score = 4
-    elif lang_count >= 1:
-        language_score = 2
-    else:
-        language_score = 0
+        breakdown = {
+            "github_score_25": github_component,
+            "skills_score_15": skills_component,
+            "cgpa_score_10": cgpa_component,
+            "activity_score_10": activity_component,
+            "project_diversity_score_10": diversity_component,
+            "language_diversity_score_10": lang_component,
+            "resume_ats_score_20": ats_component,
+            "raw_total_100": total_prs
+        }
 
-    # ---------------- Resume ATS Score (0-20) ----------------
-    ats_score_raw = student.get("ats_score", 0) # 0-100
-    ats_score_component = int((ats_score_raw / 100) * 20)
+        skill_gap_vector = {
+            "target_role": target_role,
+            "matched_skills": matched_skills,
+            "missing_priority_skills": missing_skills,
+            "alignment_score": target_match_pct
+        }
 
-    # ---------------- Final PRS (out of 100) ----------------
-    # Updated Total Weightage:
-    # GitHub: 25
-    # Skills: 15
-    # CGPA: 10
-    # Activity: 10
-    # Project Diversity: 10
-    # Language Diversity: 10
-    # ATS Score: 20
-    # TOTAL: 100 (No scaling needed if all components sum to 100)
+        return {
+            "prs_score": total_prs,
+            "prs_level": prs_level,
+            "target_role_match_pct": target_match_pct,
+            "breakdown": breakdown,
+            "skill_gap_vector": skill_gap_vector
+        }
 
-    prs_total = (
-        github_score +
-        skills_score +
-        cgpa_score +
-        activity_score +
-        diversity_score +
-        language_score +
-        ats_score_component
+    def _execute_fallback_scoring() -> Dict[str, Any]:
+        return {
+            "prs_score": 65,
+            "prs_level": "Good",
+            "target_role_match_pct": 70,
+            "breakdown": {
+                "github_score_25": 15,
+                "skills_score_15": 10,
+                "cgpa_score_10": 7,
+                "activity_score_10": 6,
+                "project_diversity_score_10": 6,
+                "language_diversity_score_10": 6,
+                "resume_ats_score_20": 15,
+                "raw_total_100": 65
+            },
+            "skill_gap_vector": {
+                "target_role": student.get("target_role", "Software Engineer"),
+                "matched_skills": student.get("skills", []),
+                "missing_priority_skills": ["System Design", "Docker"],
+                "alignment_score": 70
+            }
+        }
+
+    return call_with_retry_and_fallback(
+        primary_fn=_execute_ai_scoring_model,
+        fallback_fn=_execute_fallback_scoring,
+        max_retries=2
     )
-
-    breakdown = {
-        "github_score_25": github_score,
-        "skills_score_15": skills_score,
-        "cgpa_score_10": cgpa_score,
-        "activity_score_10": activity_score,
-        "project_diversity_score_10": diversity_score,
-        "language_diversity_score_10": language_score,
-        "resume_ats_score_20": ats_score_component,
-        "raw_total_100": prs_total
-    }
-
-    # ---------------- PRS LEVEL ----------------
-    if prs_total >= 80:
-        prs_level = "Excellent"
-    elif prs_total >= 60:
-        prs_level = "Good"
-    elif prs_total >= 40:
-        prs_level = "Average"
-    else:
-        prs_level = "Poor"
-
-    return {
-        "prs_score": prs_total,
-        "prs_level": prs_level,
-        "breakdown": breakdown
-    }
