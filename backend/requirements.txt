@@ -1,6 +1,7 @@
-﻿fastapi
-uvicorn
-motor
+fastapi
+uvicorn[standard]
+asyncpg
+psycopg2-binary
 python-dotenv
 pydantic
 email-validator
@@ -13,4 +14,3 @@ requests
 pillow
 httpx
 PyJWT
-

@@ -1,9 +1,23 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 from app.routes import auth_routes, student_routes, admin_routes
+from app.database import get_pool, close_pool
 
-app = FastAPI(title="CampusIQ Backend")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: initialize DB pool
+    await get_pool()
+    print("[OK] Database connected successfully!")
+    yield
+    # Shutdown: close DB pool
+    await close_pool()
+    print("[CLOSED] Database connection closed.")
+
+
+app = FastAPI(title="CampusIQ Backend", lifespan=lifespan)
 
 # CORS (allow frontend / test html)
 app.add_middleware(

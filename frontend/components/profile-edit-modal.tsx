@@ -19,7 +19,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Loader2, Edit2, Save } from 'lucide-react'
+import { Loader2, Edit2, Save, User, GraduationCap, Code2, Linkedin, Github } from 'lucide-react'
+import { Separator } from '@/components/ui/separator'
 import api from '@/lib/api'
 
 interface ProfileEditModalProps {
@@ -44,7 +45,6 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
     const [analyzingResume, setAnalyzingResume] = useState(false)
     const [resumeAnalysis, setResumeAnalysis] = useState<any>(null)
 
-
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value })
     }
@@ -63,33 +63,27 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
     const handleAnalyzeResume = async (file: File) => {
         setAnalyzingResume(true)
         try {
-            const formData = new FormData()
-            formData.append('file', file)
+            const fd = new FormData()
+            fd.append('file', file)
 
-            const res = await api.post('/api/student/analyze/resume', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
+            const res = await api.post('/api/student/analyze/resume', fd, {
+                headers: { 'Content-Type': 'multipart/form-data' },
             })
 
-            // Store analysis result
             setResumeAnalysis(res.data)
-            alert(`✅ Resume Analyzed! ATS Score: ${res.data.ats_score}/100`)
+            alert(`Resume Analyzed! ATS Score: ${res.data.ats_score}/100`)
 
-            // Auto-fill skills if found inside the nested 'analysis' object
-            const analysisData = res.data.analysis;
+            const analysisData = res.data.analysis
             if (analysisData && analysisData.skills && Array.isArray(analysisData.skills)) {
                 const newSkills = analysisData.skills.join(', ')
                 setFormData(prev => {
                     const currentSkills = prev.skills || ''
-                    // Avoid duplicates if possible but simple concatenation is fine for now
                     return {
                         ...prev,
                         skills: currentSkills ? `${currentSkills}, ${newSkills}` : newSkills
                     }
                 })
             }
-
         } catch (error) {
             console.error('Resume analysis error:', error)
             alert('Failed to analyze resume. Please try again.')
@@ -111,7 +105,7 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
             }
 
             await api.put('/api/student/update', payload)
-            onUpdate() // Refresh parent data
+            onUpdate()
             setOpen(false)
         } catch (error) {
             console.error('Update profile error:', error)
@@ -124,27 +118,27 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden md:flex gap-2">
+                <Button variant="outline" size="lg" className="hidden md:flex gap-2 h-11 px-5">
                     <Edit2 className="h-4 w-4" />
                     Edit Profile
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>Edit Profile Details</DialogTitle>
+            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto p-0">
+                <DialogHeader className="px-8 pt-8 pb-4">
+                    <DialogTitle className="text-2xl font-bold">Edit Profile Details</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+                <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-6">
                     {/* Resume Upload Section */}
-                    <div className="p-4 border border-dashed rounded-lg bg-gray-50 text-center">
+                    <div className="p-6 border-2 border-dashed rounded-2xl bg-gray-50 text-center">
                         <Label htmlFor="resume" className="cursor-pointer block">
-                            <div className="flex flex-col items-center gap-2">
-                                <div className="p-2 bg-blue-100 rounded-full text-blue-600">
-                                    {analyzingResume ? <Loader2 className="h-6 w-6 animate-spin" /> : <Edit2 className="h-6 w-6" />}
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="p-3 bg-blue-100 rounded-full text-blue-600">
+                                    {analyzingResume ? <Loader2 className="h-8 w-8 animate-spin" /> : <Edit2 className="h-8 w-8" />}
                                 </div>
-                                <span className="text-sm font-medium text-gray-700">
+                                <span className="text-base font-medium text-gray-700">
                                     {analyzingResume ? "Analyzing Resume..." : "Upload Resume Image for AI Analysis"}
                                 </span>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-sm text-gray-500">
                                     Upload an image of your resume to auto-extract skills and get an ATS score.
                                 </span>
                             </div>
@@ -158,76 +152,121 @@ export function ProfileEditModal({ studentData, onUpdate }: ProfileEditModalProp
                             />
                         </Label>
                         {resumeAnalysis && (
-                            <div className="mt-3 text-sm text-left bg-green-50 p-3 rounded border border-green-100">
-                                <p className="font-semibold text-green-700">✅ Analysis Complete</p>
-                                <p>ATS Score: <strong>{resumeAnalysis.ats_score}/100</strong></p>
+                            <div className="mt-4 text-sm text-left bg-green-50 p-4 rounded-xl border border-green-100">
+                                <p className="font-semibold text-green-700 text-base">✅ Analysis Complete</p>
+                                <p className="mt-1">ATS Score: <strong className="text-lg">{resumeAnalysis.ats_score}/100</strong></p>
                                 <p className="text-xs mt-1 text-gray-600">Skills extracted and added to form.</p>
                             </div>
                         )}
                     </div>
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="name">Full Name</Label>
-                        <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                            <Label>Year</Label>
-                            <Select value={formData.year} onValueChange={(val) => handleSelectChange('year', val)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Year" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="FY">First Year</SelectItem>
-                                    <SelectItem value="SY">Second Year</SelectItem>
-                                    <SelectItem value="TY">Third Year</SelectItem>
-                                    <SelectItem value="FINAL">Final Year</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label>Branch</Label>
-                            <Select value={formData.branch} onValueChange={(val) => handleSelectChange('branch', val)}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Branch" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="CSE">CSE</SelectItem>
-                                    <SelectItem value="IT">IT</SelectItem>
-                                    <SelectItem value="ECS">ECS</SelectItem>
-                                    <SelectItem value="ENTC">ENTC</SelectItem>
-                                    <SelectItem value="MECH">MECH</SelectItem>
-                                    <SelectItem value="CIVIL">CIVIL</SelectItem>
-                                </SelectContent>
-                            </Select>
+                    {/* Personal Info */}
+                    <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Personal Information</p>
+                        <div className="grid gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="name" className="text-sm font-semibold flex items-center gap-2">
+                                    <User className="h-4 w-4 text-blue-500" />
+                                    Full Name
+                                </Label>
+                                <Input id="name" name="name" value={formData.name} onChange={handleChange} required
+                                    className="h-12 text-base rounded-xl" />
+                            </div>
                         </div>
                     </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="cgpa">CGPA (out of 10)</Label>
-                        <Input id="cgpa" name="cgpa" type="number" step="0.01" min="0" max="10" value={formData.cgpa} onChange={handleChange} required />
+
+                    <Separator />
+
+                    {/* Academic Info */}
+                    <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Academic Details</p>
+                        <div className="grid gap-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-2">
+                                    <Label className="text-sm font-semibold flex items-center gap-2">
+                                        <GraduationCap className="h-4 w-4 text-blue-500" />
+                                        Year
+                                    </Label>
+                                    <Select value={formData.year} onValueChange={(val) => handleSelectChange('year', val)}>
+                                        <SelectTrigger className="h-12 text-base rounded-xl">
+                                            <SelectValue placeholder="Select Year" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="FY">First Year</SelectItem>
+                                            <SelectItem value="SY">Second Year</SelectItem>
+                                            <SelectItem value="TY">Third Year</SelectItem>
+                                            <SelectItem value="FINAL">Final Year</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label className="text-sm font-semibold flex items-center gap-2">
+                                        <Code2 className="h-4 w-4 text-blue-500" />
+                                        Branch
+                                    </Label>
+                                    <Select value={formData.branch} onValueChange={(val) => handleSelectChange('branch', val)}>
+                                        <SelectTrigger className="h-12 text-base rounded-xl">
+                                            <SelectValue placeholder="Select Branch" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="CSE">CSE</SelectItem>
+                                            <SelectItem value="IT">IT</SelectItem>
+                                            <SelectItem value="ECS">ECS</SelectItem>
+                                            <SelectItem value="ENTC">ENTC</SelectItem>
+                                            <SelectItem value="MECH">MECH</SelectItem>
+                                            <SelectItem value="CIVIL">CIVIL</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="cgpa" className="text-sm font-semibold">CGPA (out of 10)</Label>
+                                <Input id="cgpa" name="cgpa" type="number" step="0.01" min="0" max="10" value={formData.cgpa} onChange={handleChange} required
+                                    className="h-12 text-base rounded-xl" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="skills" className="text-sm font-semibold">Technical Skills (comma separated)</Label>
+                                <Input id="skills" name="skills" value={formData.skills} onChange={handleChange} required placeholder="Python, React, AWS..." 
+                                    className="h-12 text-base rounded-xl" />
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="skills">Technical Skills (comma separated)</Label>
-                        <Input id="skills" name="skills" value={formData.skills} onChange={handleChange} required placeholder="Python, React, AWS..." />
+
+                    <Separator />
+
+                    {/* Online Profiles */}
+                    <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Online Profiles</p>
+                        <div className="grid gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="linkedin_url" className="text-sm font-semibold flex items-center gap-2">
+                                    <Linkedin className="h-4 w-4 text-blue-700" />
+                                    LinkedIn URL
+                                </Label>
+                                <Input id="linkedin_url" name="linkedin_url" value={formData.linkedin_url} onChange={handleChange} placeholder="https://linkedin.com/in/..."
+                                    className="h-12 text-base rounded-xl" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="github_url" className="text-sm font-semibold flex items-center gap-2">
+                                    <Github className="h-4 w-4 text-gray-800" />
+                                    GitHub URL
+                                </Label>
+                                <Input id="github_url" name="github_url" value={formData.github_url} onChange={handleChange} placeholder="https://github.com/..."
+                                    className="h-12 text-base rounded-xl" />
+                            </div>
+                        </div>
                     </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="linkedin_url">LinkedIn URL</Label>
-                        <Input id="linkedin_url" name="linkedin_url" value={formData.linkedin_url} onChange={handleChange} placeholder="https://linkedin.com/in/..." />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="github_url">GitHub URL</Label>
-                        <Input id="github_url" name="github_url" value={formData.github_url} onChange={handleChange} placeholder="https://github.com/..." />
-                    </div>
-                    <DialogFooter>
-                        <Button type="submit" disabled={loading}>
+
+                    <DialogFooter className="pt-4">
+                        <Button type="submit" disabled={loading} size="lg" className="h-12 px-8 text-base">
                             {loading ? (
                                 <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                                     Saving...
                                 </>
                             ) : (
                                 <>
-                                    <Save className="mr-2 h-4 w-4" />
+                                    <Save className="mr-2 h-5 w-5" />
                                     Save Changes
                                 </>
                             )}

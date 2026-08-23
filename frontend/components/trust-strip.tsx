@@ -9,7 +9,7 @@ gsap.registerPlugin(ScrollTrigger)
 export function TrustStrip() {
   const containerRef = useRef(null)
   const headingRef = useRef(null)
-  const logosRef = useRef([])
+  const logosRef = useRef<(HTMLDivElement | null)[]>([])
 
   useEffect(() => {
     const ctx = gsap.context(() => {
