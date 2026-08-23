@@ -43,11 +43,12 @@ api.interceptors.response.use(
     },
     (error) => {
         if (error.response && error.response.status === 401) {
-            // Redirect to login page if authorized
-            if (typeof window !== 'undefined') {
+            // Redirect to login page if authorized, but avoid infinite loops on /login
+            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
                 const role = localStorage.getItem('role');
                 localStorage.removeItem('token'); // Clear invalid token
                 localStorage.removeItem('role');
+                document.cookie = 'token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
 
                 if (role === 'admin') {
                     window.location.href = '/admin/login';

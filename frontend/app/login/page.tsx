@@ -85,26 +85,40 @@ export default function LoginPage() {
           email: formData.email,
           password: formData.password,
         })
-        await handleAuthSuccess(response.data.access_token, response.data.role)
+        setSuccessMessage("Logged in successfully! Redirecting...")
+        await handleAuthSuccess(
+          response.data.access_token,
+          response.data.role,
+          response.data.onboarding_completed
+        )
       } else {
         const payload = {
-          ...formData,
-          cgpa: parseFloat(formData.cgpa),
-          skills: formData.skills.split(',').map(s => s.trim()).filter(s => s !== ''),
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          year: formData.year || null,
+          branch: formData.branch || null,
+          cgpa: formData.cgpa ? parseFloat(formData.cgpa) : null,
+          skills: formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
+          linkedin_url: formData.linkedin_url || null,
+          github_url: formData.github_url || null,
         }
 
         const response = await api.post("/api/auth/signup", payload)
 
-        setSuccessMessage("Account created successfully! Redirecting to your dashboard...")
+        setSuccessMessage("Account created successfully! Redirecting...")
         setTimeout(async () => {
-          await handleAuthSuccess(response.data.access_token, 'student')
-        }, 1500)
+          await handleAuthSuccess(
+            response.data.access_token,
+            'student',
+            response.data.onboarding_completed
+          )
+        }, 1000)
       }
 
     } catch (err: any) {
       console.error("Auth Error:", err)
 
-      // Better error messages for common issues
       if (!err.response && err.message === 'Network Error') {
         setError("Cannot connect to server. Please make sure the backend is running on http://localhost:8000")
       } else {
@@ -112,7 +126,7 @@ export default function LoginPage() {
         if (Array.isArray(detail)) {
           setError(detail.map((e: any) => e.msg).join(', '))
         } else {
-          setError(detail || "Authentication failed. Please check your inputs.")
+          setError(detail || "Authentication failed. Please check your credentials.")
         }
       }
     } finally {
@@ -120,7 +134,7 @@ export default function LoginPage() {
     }
   }
 
-  const handleAuthSuccess = async (token: string, role: string = 'student') => {
+  const handleAuthSuccess = async (token: string, role: string = 'student', onboardingCompleted?: boolean) => {
     const { setAuthToken, setUserRole } = await import('@/lib/auth')
     setAuthToken(token)
     setUserRole(role as 'admin' | 'student')
@@ -130,25 +144,23 @@ export default function LoginPage() {
       return
     }
 
+    if (onboardingCompleted === false) {
+      router.push('/onboarding')
+      return
+    }
+
     try {
       const studentRes = await api.get("/api/student/me", {
         headers: { Authorization: `Bearer ${token}` }
       })
       const studentData = studentRes.data
 
-      const profileCompleted =
-        studentData.branch &&
-        studentData.year &&
-        studentData.skills &&
-        studentData.skills.length > 0
-
-      if (!profileCompleted) {
-        router.push("/student/profile")
+      if (!studentData.onboarding_completed) {
+        router.push("/onboarding")
       } else {
         router.push("/dashboard")
       }
-    } catch (err) {
-      console.error("Profile check failed", err)
+    } catch {
       router.push("/dashboard")
     }
   }
