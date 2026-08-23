@@ -6,6 +6,7 @@ const protectedRoutes = [
     '/dashboard',
     '/student',
     '/admin',
+    '/onboarding',
 ]
 
 // Routes that should redirect to dashboard if already authenticated

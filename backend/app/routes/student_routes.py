@@ -3,10 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.database import get_pool
 from app.utils.auth_dependency import get_current_user
-from app.models.student_model import StudentUpdate
-
-
-router = APIRouter()
+from app.models.student_model import StudentUpdate, StudentOnboarding
 
 
 @router.get("/me")
@@ -15,7 +12,8 @@ async def get_my_profile(user=Depends(get_current_user)):
     pool = await get_pool()
 
     student = await pool.fetchrow(
-        """SELECT id, name, email, year, branch, cgpa, skills, linkedin_url, github_url,
+        """SELECT id, name, email, year, branch, cgpa, skills, skills_with_levels, linkedin_url, github_url,
+                  avatar_url, provider, onboarding_completed, target_role,
                   role, prs_score, prs_level, prs_breakdown, github_analysis, 
                   github_groq_analysis, resume_analysis, ats_score
            FROM students WHERE email = $1""",
@@ -36,15 +34,38 @@ async def get_my_profile(user=Depends(get_current_user)):
     
     # Convert JSONB fields from string to dict if needed
     import json
-    for field in ["prs_breakdown", "github_analysis", "github_groq_analysis", "resume_analysis"]:
+    for field in ["prs_breakdown", "github_analysis", "github_groq_analysis", "resume_analysis", "skills_with_levels"]:
         val = result.get(field)
         if isinstance(val, str):
             try:
                 result[field] = json.loads(val)
             except (json.JSONDecodeError, TypeError):
-                result[field] = None
+                result[field] = [] if field == "skills_with_levels" else None
 
     return result
+
+
+@router.put("/onboarding")
+async def submit_onboarding(data: StudentOnboarding, user=Depends(get_current_user)):
+    email = user["email"]
+    pool = await get_pool()
+    import json
+
+    await pool.execute(
+        """UPDATE students 
+           SET year = $1, branch = $2, cgpa = $3, skills = $4,
+               skills_with_levels = $5::jsonb, target_role = $6, onboarding_completed = TRUE
+           WHERE email = $7""",
+        data.year,
+        data.branch,
+        data.cgpa,
+        data.skills,
+        json.dumps(data.skills_with_levels),
+        data.target_role,
+        email,
+    )
+
+    return {"message": "Onboarding completed successfully"}
 
 
 @router.put("/update")

@@ -22,13 +22,19 @@ async def init_db(pool: asyncpg.Pool):
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
+                password VARCHAR(255),
                 year VARCHAR(50),
                 branch VARCHAR(100),
                 cgpa FLOAT,
                 skills TEXT[] DEFAULT '{}',
+                skills_with_levels JSONB DEFAULT '[]',
                 linkedin_url TEXT,
                 github_url TEXT,
+                avatar_url TEXT,
+                provider VARCHAR(50) DEFAULT 'credentials',
+                provider_id VARCHAR(255),
+                onboarding_completed BOOLEAN DEFAULT FALSE,
+                target_role VARCHAR(255) DEFAULT 'Software Engineer',
                 role VARCHAR(50) DEFAULT 'student',
                 prs_score INTEGER DEFAULT 0,
                 prs_level VARCHAR(100),
@@ -39,6 +45,15 @@ async def init_db(pool: asyncpg.Pool):
                 ats_score INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW()
             );
+
+            -- Migrations for existing tables
+            ALTER TABLE students ADD COLUMN IF NOT EXISTS provider VARCHAR(50) DEFAULT 'credentials';
+            ALTER TABLE students ADD COLUMN IF NOT EXISTS provider_id VARCHAR(255);
+            ALTER TABLE students ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+            ALTER TABLE students ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
+            ALTER TABLE students ADD COLUMN IF NOT EXISTS target_role VARCHAR(255) DEFAULT 'Software Engineer';
+            ALTER TABLE students ADD COLUMN IF NOT EXISTS skills_with_levels JSONB DEFAULT '[]';
+            ALTER TABLE students ALTER COLUMN password DROP NOT NULL;
         """)
 
         await conn.execute("""

@@ -30,98 +30,27 @@ export default function LoginPage() {
   const handleGoogleAuth = async () => {
     setIsSocialLoading("google")
     setError("")
-    try {
-      const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-      if (googleClientId) {
-        const redirectUri = `${window.location.origin}/api/auth/google/callback`
-        window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile`
-        return
-      }
-
-      const mockEmail = "student.google@campusiq.com"
-      const password = "google_oauth_pass_123"
-
-      let token = ""
-      try {
-        const signupRes = await api.post("/api/auth/signup", {
-          name: "Google Student",
-          email: mockEmail,
-          password: password,
-          branch: "CSE",
-          year: "3",
-          cgpa: 8.5,
-          skills: ["Python", "React", "SQL"],
-        })
-        token = signupRes.data.access_token
-      } catch {
-        try {
-          const loginRes = await api.post("/api/auth/login", {
-            email: mockEmail,
-            password: password,
-          })
-          token = loginRes.data.access_token
-        } catch {
-          token = "google_demo_jwt_token_" + Date.now()
-        }
-      }
-
-      setSuccessMessage("Authenticated with Google! Redirecting...")
-      await handleAuthSuccess(token, "student")
-    } catch (err: any) {
-      console.error("Google Auth error:", err)
-      setError("Google authentication failed. Please try again.")
-    } finally {
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!googleClientId) {
+      setError("Google OAuth Client ID is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your environment (.env) file.")
       setIsSocialLoading(null)
+      return
     }
+    const redirectUri = `${window.location.origin}/api/auth/google/callback`
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=email%20profile`
   }
 
   const handleGithubAuth = async () => {
     setIsSocialLoading("github")
     setError("")
-    try {
-      const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID
-      if (githubClientId) {
-        const redirectUri = `${window.location.origin}/api/auth/github/callback`
-        window.location.href = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`
-        return
-      }
-
-      const mockEmail = "student.github@campusiq.com"
-      const password = "github_oauth_pass_123"
-
-      let token = ""
-      try {
-        const signupRes = await api.post("/api/auth/signup", {
-          name: "GitHub Developer",
-          email: mockEmail,
-          password: password,
-          branch: "CSE",
-          year: "3",
-          cgpa: 8.8,
-          skills: ["JavaScript", "TypeScript", "Node.js"],
-          github_url: "https://github.com/student-dev",
-        })
-        token = signupRes.data.access_token
-      } catch {
-        try {
-          const loginRes = await api.post("/api/auth/login", {
-            email: mockEmail,
-            password: password,
-          })
-          token = loginRes.data.access_token
-        } catch {
-          token = "github_demo_jwt_token_" + Date.now()
-        }
-      }
-
-      setSuccessMessage("Authenticated with GitHub! Redirecting...")
-      await handleAuthSuccess(token, "student")
-    } catch (err: any) {
-      console.error("GitHub Auth error:", err)
-      setError("GitHub authentication failed. Please try again.")
-    } finally {
+    const githubClientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID
+    if (!githubClientId) {
+      setError("GitHub OAuth Client ID is not configured. Please set NEXT_PUBLIC_GITHUB_CLIENT_ID in your environment (.env) file.")
       setIsSocialLoading(null)
+      return
     }
+    const redirectUri = `${window.location.origin}/api/auth/github/callback`
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user:email`
   }
 
   const [formData, setFormData] = useState({

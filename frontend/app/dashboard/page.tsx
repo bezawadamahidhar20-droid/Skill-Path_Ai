@@ -201,7 +201,14 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
         try {
             const studentRes = await api.get('/api/student/me')
+            if (!studentRes.data.onboarding_completed) {
+                router.push('/onboarding')
+                return
+            }
             setStudentData(studentRes.data)
+            if (studentRes.data.target_role) {
+                setTargetRole(studentRes.data.target_role)
+            }
 
             if (studentRes.data.prs_score !== undefined && studentRes.data.prs_score > 0) {
                 setPrsData({
